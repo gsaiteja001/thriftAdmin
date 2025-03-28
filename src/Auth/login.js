@@ -424,7 +424,7 @@ const handleVendorSignUp = async (e) => {
     };
 
     // Make the API call to register vendor
-    const response = await axios.post('https://kissan-backend-1.onrender.com/api/vendor/signup', payload);
+    const response = await axios.post('https://thriftstorebackend.onrender.com/api/vendor/signup', payload);
 
     if (response.status === 201) {
       setVendorSignupSuccess(true);
@@ -461,7 +461,7 @@ const handleLogin = async (e) => {
     };
 
     // Send request to login endpoint
-    const response = await axios.post('https://kissan-backend-1.onrender.com/api/vendor/login', payload);
+    const response = await axios.post('https://thriftstorebackend.onrender.com/api/vendor/login', payload);
 
     // Check if login was successful
     if (response.status === 200) {

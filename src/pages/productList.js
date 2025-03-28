@@ -39,7 +39,7 @@ const ProductList = () => {
 
   const fetchItemsByVendor = async (vendorId) => {
     try {
-      const response = await axios.get(`https://kissan-backend-1.onrender.com/api/vendor/${vendorId}/items`);
+      const response = await axios.get(`https://thriftstorebackend.onrender.com/api/vendor/${vendorId}/items`);
       if (Array.isArray(response.data)) {
         setItems(response.data);
         setFilteredItems(response.data);
@@ -73,7 +73,7 @@ const ProductList = () => {
 
   const handleItemDelete = async (itemId) => {
     try {
-      const response = await axios.delete(`https://kissan-backend-1.onrender.com/api/item/${itemId}`);
+      const response = await axios.delete(`https://thriftstorebackend.onrender.com/api/item/${itemId}`);
       console.log('Item deleted successfully:', response.data);
       fetchItemsByVendor();
     } catch (error) {
@@ -85,7 +85,7 @@ const ProductList = () => {
     const newItem = { ...editItemData, imageURL: uploadedImages.join(',') }; // Handle multiple image URLs
 
     try {
-      const response = await axios.put(`https://kissan-backend-1.onrender.com/api/item/${editItemData.item_id}`, newItem);
+      const response = await axios.put(`https://thriftstorebackend.onrender.com/api/item/${editItemData.item_id}`, newItem);
       console.log('Item updated successfully:', response.data);
       fetchItemsByVendor();
       setShowEditModal(false);
@@ -98,7 +98,7 @@ const ProductList = () => {
     const newItem = { ...editItemData, imageURL: uploadedImages.join(','), vendor_id: vendorId };
 
     try {
-      const response = await axios.post('https://kissan-backend-1.onrender.com/api/item', newItem);
+      const response = await axios.post('https://thriftstorebackend.onrender.com/api/item', newItem);
       console.log('Item added successfully:', response.data);
       fetchItemsByVendor();
       setShowUploadContainer(false);
