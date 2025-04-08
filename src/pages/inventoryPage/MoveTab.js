@@ -5,7 +5,7 @@ import { Box, Button, TextField, Snackbar, Alert, Tooltip, IconButton, Paper } f
 import { Save, AddCircleOutline } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 
-const API_BASE_URL = 'http://localhost:8080/api';
+const API_BASE_URL = 'https://thriftstorebackend-8xii.onrender.com/api';
 
 export default function MoveTab({ selectedWarehouseId }) {
   const [sourceLocation, setSourceLocation] = useState('');

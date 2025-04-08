@@ -29,10 +29,10 @@ import {
 import { motion } from 'framer-motion';
 import { LoginContext } from '../../context/loginContext';
 
-const API_BASE_URL = 'http://localhost:8080/api';
+const API_BASE_URL = 'https://thriftstorebackend-8xii.onrender.com/api';
 
 export default function StockInTab({ selectedWarehouseId }) {
-  const { login, sellerInfo } = useContext(LoginContext); 
+  const { login, vendorId } = useContext(LoginContext); 
 
   const [date, setDate] = useState('');
   const [batchNumber, setBatchNumber] = useState('');
@@ -47,80 +47,27 @@ export default function StockInTab({ selectedWarehouseId }) {
   const [showSuggestions, setShowSuggestions] = useState(false);
 
   const [inventoryItems, setInventoryItems] = useState([]);
-  const [productsMap, setProductsMap] = useState({});
   const [items, setItems] = useState([]);
 
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
-  // Fetch inventory items
   useEffect(() => {
-    if (!selectedWarehouseId) return;
-
+    if (!vendorId) return;
+  
     const fetchItems = async () => {
       try {
-        const res = await axios.get(`${API_BASE_URL}/inventory/Items`, {
-          params: { warehouseId: selectedWarehouseId },
-        });
-        const fetchedInventoryItems = res.data.data || [];
-        setInventoryItems(fetchedInventoryItems);
-        console.log('Fetched inventoryItems:', fetchedInventoryItems);
+        const response = await axios.get(`https://thriftstorebackend-8xii.onrender.com/api/vendor/${vendorId}/items`);
+        if (Array.isArray(response.data)) {
+          setInventoryItems(response.data);  
+        }
       } catch (error) {
         console.error('Failed to fetch warehouse inventory items', error);
         setSnackbar({ open: true, message: 'Failed to fetch inventory items.', severity: 'error' });
       }
     };
-
+  
     fetchItems();
-  }, [selectedWarehouseId]);
-
-  // Fetch product data
-  useEffect(() => {
-    if (!inventoryItems || inventoryItems.length === 0) return;
-
-    const fetchProductData = async () => {
-      try {
-        const uniqueProductIds = [
-          ...new Set(inventoryItems.map((inv) => inv.productId)),
-        ];
-
-        const requests = uniqueProductIds.map((pid) =>
-          axios
-            .get(`${API_BASE_URL}/products/${pid}`)
-            .then((response) => ({
-              success: true,
-              productId: pid,
-              data: response.data,
-            }))
-            .catch((error) => ({
-              success: false,
-              productId: pid,
-              error: error.response?.data?.message || error.message,
-            }))
-        );
-
-        const responses = await Promise.all(requests);
-
-        const productMap = {};
-        responses.forEach((resp) => {
-          if (resp.success && resp.data?.productId) {
-            productMap[resp.data.productId] = resp.data;
-          } else {
-            console.warn(
-              `Failed to fetch productId ${resp.productId}: ${resp.error}`
-            );
-            productMap[resp.productId] = null;
-          }
-        });
-
-        setProductsMap(productMap);
-      } catch (error) {
-        console.error('Error fetching product data:', error);
-        setSnackbar({ open: true, message: 'Error fetching product data.', severity: 'error' });
-      }
-    };
-
-    fetchProductData();
-  }, [inventoryItems]);
+  }, [vendorId]);
 
   // Generate Batch Number
   const generateBatchNumber = (warehouseId) => {
@@ -134,82 +81,38 @@ export default function StockInTab({ selectedWarehouseId }) {
     }
   }, [batchNumber, selectedWarehouseId]);
 
-  // Add New Item
-  // Add New Item - Only Valid Products
-const handleAddNewItem = () => {
-  if (filteredInventoryItems.length === 0) {
-    setSnackbar({
-      open: true,
-      message: 'No valid products available to add.',
-      severity: 'error',
-    });
-    return;
-  }
-
-  // Add the first available valid product from the filtered list
-  const inventoryItem = filteredInventoryItems[0]; // Add the first valid product from suggestions
-  const productInfo = productsMap[inventoryItem.productId];
-
-  const newId = Date.now();
-  const productName = productInfo?.name || `Item #${newId}`;
-  const productSize = productInfo?.size || 'N/A';
-
-  setItems((prev) => [
-    ...prev,
-    {
-      _id: newId,
-      productId: inventoryItem.productId,
-      variantId: inventoryItem.variantId,
-      name: productName,
-      size: productSize,
-      currentStock: inventoryItem.quantityOnHand || 0,
-      quantity: 1,
-      unitPrice: 0,
-      allocatedTransport: 0,
-      allocatedOther: 0,
-      allocatedTax: 0,
-      totalCost: 0,
-      finalCutoffUnitPrice: 0,
-      notes: '',
-    },
-  ]);
-
-  setSearchTerm(''); // Clear the search term
-  setShowSuggestions(false); // Hide suggestions
-  setSnackbar({ open: true, message: `${productName} added to the list.`, severity: 'success' });
-};
-
-  // Add Inventory Item from Suggestions
   const handleAddInventoryItem = (inventoryItem) => {
     const newId = Date.now();
-    const productInfo = productsMap[inventoryItem.productId];
-
-    const productName = productInfo?.name || `Item #${newId}`;
-    const productSize = productInfo?.size || 'N/A';
-
+  
+    // Ensure all fields are initialized correctly
     setItems((prev) => [
       ...prev,
       {
         _id: newId,
-        productId: inventoryItem.productId,
-        variantId: inventoryItem.variantId,
-        name: productName,
-        size: productSize,
-        currentStock: inventoryItem.quantityOnHand || 0,
+        productId: inventoryItem.item_id, // Use item_id from the response
+        name: inventoryItem.name,
+        brand: inventoryItem.brand,
+        size: inventoryItem.size || 'N/A',
+        color: inventoryItem.color || 'N/A',
+        item_condition: inventoryItem.item_condition || 'N/A',
+        costPrice: parseFloat(inventoryItem.cost_price) || 0,
+        sellingPrice: parseFloat(inventoryItem.selling_price) || 0,
+        currentStock: inventoryItem.stock_quantity || 0,
         quantity: 1,
-        unitPrice: 0,
-        allocatedTransport: 0,
-        allocatedOther: 0,
-        allocatedTax: 0,
-        totalCost: 0,
-        finalCutoffUnitPrice: 0,
+        totalCost: 0, // Ensure initialized to 0
+        allocatedTransport: 0, // Ensure initialized to 0
+        allocatedOther: 0, // Ensure initialized to 0
+        allocatedTax: 0, // Ensure initialized to 0
+        finalCutoffUnitPrice: 0, // Ensure initialized to 0
         notes: '',
       },
     ]);
     setSearchTerm('');
     setShowSuggestions(false);
-    setSnackbar({ open: true, message: `${productName} added to the list.`, severity: 'success' });
+    setSnackbar({ open: true, message: `${inventoryItem.name} added to the list.`, severity: 'success' });
   };
+
+
 
   // Remove Item
   const handleRemoveItem = (id) => {
@@ -229,7 +132,7 @@ const handleAddNewItem = () => {
   const handleUnitPriceChange = (id, value) => {
     const price = parseFloat(value) || 0;
     setItems((prev) =>
-      prev.map((item) => (item._id === id ? { ...item, unitPrice: price } : item))
+      prev.map((item) => (item._id === id ? { ...item, totalCost: item.quantity * price } : item))
     );
   };
 
@@ -245,12 +148,12 @@ const handleAddNewItem = () => {
     if (items.length === 0) return;
 
     const totalSubTotals = items.reduce(
-      (sum, item) => sum + item.quantity * item.unitPrice,
+      (sum, item) => sum + item.quantity * item.sellingPrice,
       0
     );
 
     const updated = items.map((item) => {
-      const subTotal = item.quantity * item.unitPrice;
+      const subTotal = item.quantity * item.sellingPrice;
       const ratio = totalSubTotals > 0 ? subTotal / totalSubTotals : 0;
 
       const distributedTransport = transportCharges * ratio;
@@ -259,90 +162,80 @@ const handleAddNewItem = () => {
 
       const totalCost = subTotal + distributedTransport + distributedOther + distributedTax;
 
-      const finalCutoffUnitPrice =
-        item.quantity > 0 ? totalCost / item.quantity : 0;
-
       return {
         ...item,
         allocatedTransport: distributedTransport,
         allocatedOther: distributedOther,
         allocatedTax: distributedTax,
         totalCost,
-        finalCutoffUnitPrice,
       };
     });
 
     setItems(updated);
   }, [items, transportCharges, otherCharges, taxes]);
 
-  // Handle Submit Stock In
   const handleSubmitStockIn = async () => {
-    if (!selectedWarehouseId) {
-      setSnackbar({ open: true, message: 'Please select a warehouse first.', severity: 'error' });
-      return;
-    }
     if (items.length === 0) {
       setSnackbar({ open: true, message: 'No items to stock in.', severity: 'error' });
       return;
     }
-
-    const payload = {
-      transactionType: 'stockIn',
-      warehouseId: selectedWarehouseId,
-      sellerId: sellerInfo.sellerId,
-      performedBy: 'AdminUser',
-      timestamp: date ? new Date(date) : new Date(),
-      batchNumber,
-      notes: purchaseNotes,
-      paymentMethod,
-      totalTransportCharges: Number(transportCharges),
-      totalOtherCharges: Number(otherCharges),
-      totalTaxes: Number(taxes),
-      products: items.map((item) => ({
-        productId: item.productId,
-        variantId: item.variantId || null,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        allocatedTransport: item.allocatedTransport, 
-        allocatedOther: item.allocatedOther,
-        allocatedTax: item.allocatedTax,
-        totalCost: item.totalCost,
-        finalCutoffUnitPrice: item.finalCutoffUnitPrice,
-        notes: item.notes
-      })),
-    };
-
+  
     try {
-      const res = await axios.post(`${API_BASE_URL}/stockTransactions/create`, payload);
+      // First, update stock for each item by calling the updateStock API (operation "add")
+      const updatePromises = items.map(async (item) => {
+        // Find the matching current inventory record to calculate a new selling price
+        const inventoryItem = inventoryItems.find(inv => inv.item_id === item.productId);
+        const currentStock = inventoryItem ? parseFloat(inventoryItem.stock_quantity) : 0;
+        const currentSellingPrice = inventoryItem ? parseFloat(inventoryItem.selling_price) : 0;
+        
+        // Calculate a new selling price using a simple formula.
+        // (This example uses item.totalCost/item.quantity; adjust calculation as needed.)
+        const newSellingPrice = item.totalCost / item.quantity;
+        
+        return axios.put(`${API_BASE_URL}/item/updateStock/${item.productId}`, {
+          operation: 'add',
+          quantity: item.quantity,
+          newSellingPrice
+        });
+      });
+      await Promise.all(updatePromises);
+  
+      // Now record the stock-in transaction for each item
+      const transactionPromises = items.map((item) =>
+        axios.post(`${API_BASE_URL}/Stock-transactions/create`, {
+          transaction_type: "stockIn",
+          item_id: item.productId,
+          vendor_id: vendorId,  // assuming vendorId is available from context for stockIn
+          performed_by: "vendor",
+          quantity: item.quantity
+        })
+      );
+      await Promise.all(transactionPromises);
+  
       setSnackbar({ open: true, message: 'Stock In transaction recorded successfully!', severity: 'success' });
-      // Reset form
+      // Reset form fields
       setItems([]);
       setDate('');
-      setBatchNumber(generateBatchNumber(selectedWarehouseId));
       setPurchaseNotes('');
       setPaymentMethod('');
       setTransportCharges(0);
       setOtherCharges(0);
       setTaxes(0);
     } catch (error) {
-      console.error('Failed to create StockIn transaction', error);
-      setSnackbar({ open: true, message: 'Error creating StockIn transaction.', severity: 'error' });
+      console.error('Failed to update stock for Stock In transaction', error);
+      setSnackbar({ open: true, message: 'Error updating Stock In transaction.', severity: 'error' });
     }
   };
-
-  // Filter suggestions by product name
-const filteredInventoryItems = inventoryItems.filter((invItem) => {
-  const product = productsMap[invItem.productId];
-  if (!product) return false;
-
-  const productName = product.name?.toLowerCase() || '';
   
-  // Check if the product is already added to the items table
-  const alreadyAdded = items.some((item) => item.productId === invItem.productId);
   
-  return productName.includes(searchTerm.toLowerCase()) && !alreadyAdded;
-});
 
+  // Filter suggestions by product name, excluding already added items
+  const filteredInventoryItems = inventoryItems.filter((invItem) => {
+    return (
+      (invItem.name.toLowerCase().includes(searchTerm.toLowerCase()) || searchTerm === '') && 
+      !items.some((item) => item.productId === invItem.item_id)
+    );
+  });
 
   return (
     <Box sx={{ padding: 4, backgroundColor: '#f9f9f9', borderRadius: 2 }}>
@@ -465,44 +358,33 @@ const filteredInventoryItems = inventoryItems.filter((invItem) => {
             }}
           />
           {showSuggestions && filteredInventoryItems.length > 0 && (
-              <Paper 
-                sx={{ 
-                  position: 'absolute', 
-                  top: '100%', 
-                  left: 0, 
-                  right: 0, 
-                  maxHeight: 200, 
-                  overflowY: 'auto',
-                  zIndex: 10 
-                }}
-              >
-                {filteredInventoryItems.map((invItem) => {
-                  const product = productsMap[invItem.productId];
-                  const productName = product?.name || 'Unnamed Product';
-                  return (
-                    <Box
-                      key={invItem._id}
-                      onClick={() => handleAddInventoryItem(invItem)}
-                      sx={{ 
-                        padding: 1, 
-                        cursor: 'pointer', 
-                        '&:hover': { backgroundColor: '#f0f0f0' } 
-                      }}
-                    >
-                      {productName} {product?.size ? `(${product.size})` : ''}
-                    </Box>
-                  );
-                })}
-              </Paper>
-            )}
-
+            <Paper 
+              sx={{ 
+                position: 'absolute', 
+                top: '100%', 
+                left: 0, 
+                right: 0, 
+                maxHeight: 200, 
+                overflowY: 'auto',
+                zIndex: 10 
+              }}
+            >
+              {filteredInventoryItems.map((invItem) => (
+                <Box
+                  key={invItem.item_id}
+                  onClick={() => handleAddInventoryItem(invItem)}
+                  sx={{ 
+                    padding: 1, 
+                    cursor: 'pointer', 
+                    '&:hover': { backgroundColor: '#f0f0f0' } 
+                  }}
+                >
+                  {invItem.name}
+                </Box>
+              ))}
+            </Paper>
+          )}
         </Box>
-
-        <Tooltip title="Add New Item">
-          <IconButton color="primary" onClick={handleAddNewItem}>
-            <AddCircleOutline />
-          </IconButton>
-        </Tooltip>
 
         <Tooltip title="Submit Stock In">
           <Button 
@@ -523,6 +405,7 @@ const filteredInventoryItems = inventoryItems.filter((invItem) => {
             <TableRow>
               <TableCell sx={{ color: '#fff' }}>S.No</TableCell>
               <TableCell sx={{ color: '#fff' }}>Item</TableCell>
+              <TableCell sx={{ color: '#fff' }}>Brand</TableCell>
               <TableCell sx={{ color: '#fff' }}>Size</TableCell>
               <TableCell sx={{ color: '#fff' }}>Current Stock</TableCell>
               <TableCell sx={{ color: '#fff' }}>Quantity</TableCell>
@@ -554,6 +437,7 @@ const filteredInventoryItems = inventoryItems.filter((invItem) => {
                 >
                   <TableCell>{idx + 1}</TableCell>
                   <TableCell>{item.name || 'Unnamed'}</TableCell>
+                  <TableCell>{item.brand || 'N/A'}</TableCell>
                   <TableCell>{item.size || 'N/A'}</TableCell>
                   <TableCell>{item.currentStock ?? 0}</TableCell>
                   <TableCell>
@@ -567,20 +451,13 @@ const filteredInventoryItems = inventoryItems.filter((invItem) => {
                     />
                   </TableCell>
                   <TableCell>
-                    <TextField
-                      type="number"
-                      inputProps={{ min: 0, step: 0.01 }}
-                      value={item.unitPrice}
-                      onChange={(e) => handleUnitPriceChange(item._id, e.target.value)}
-                      size="small"
-                      variant="outlined"
-                    />
+                      {item.sellingPrice || 'N/A'}
                   </TableCell>
-                  <TableCell>₹{item.allocatedTransport.toFixed(2)}</TableCell>
-                  <TableCell>₹{item.allocatedOther.toFixed(2)}</TableCell>
-                  <TableCell>₹{item.allocatedTax.toFixed(2)}</TableCell>
-                  <TableCell>₹{item.totalCost.toFixed(2)}</TableCell>
-                  <TableCell>₹{item.finalCutoffUnitPrice.toFixed(2)}</TableCell>
+                  <TableCell>${item.allocatedTransport.toFixed(2)}</TableCell>
+                  <TableCell>${item.allocatedOther.toFixed(2)}</TableCell>
+                  <TableCell>${item.allocatedTax.toFixed(2)}</TableCell>
+                  <TableCell>${item.totalCost.toFixed(2)}</TableCell>
+                  <TableCell>${item.totalCost / item.quantity} </TableCell>
                   <TableCell>
                     <TextField
                       value={item.notes}

@@ -1,21 +1,24 @@
-// src/components/InventoryPage/TransactionsTab.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 
 // React Icons:
 import { FaSearch, FaBoxOpen, FaExchangeAlt, FaArrowDown, FaArrowUp } from 'react-icons/fa';
 import { BiNotepad } from 'react-icons/bi';
+import { LoginContext } from '../../context/loginContext';
 
-const API_BASE_URL = 'http://localhost:8080/api';
+const API_BASE_URL = 'https://thriftstorebackend-8xii.onrender.com/api';
 
-export default function TransactionsTab({ selectedWarehouseId }) {
+export default function TransactionsTab() {
+  const { login, vendorId } = useContext(LoginContext); 
   const [transactions, setTransactions] = useState([]);
   const [filteredTx, setFilteredTx] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTx, setSelectedTx] = useState(null);
+  const [selectedTxProducts, setSelectedTxProducts] = useState([]);
 
+  // Fetch transactions by vendor_id
   useEffect(() => {
-    if (!selectedWarehouseId) {
+    if (!vendorId) {
       setTransactions([]);
       setFilteredTx([]);
       return;
@@ -23,9 +26,8 @@ export default function TransactionsTab({ selectedWarehouseId }) {
 
     const fetchTransactions = async () => {
       try {
-        const res = await axios.get(`${API_BASE_URL}/stockTransactions`, {
-          params: { warehouseId: selectedWarehouseId },
-        });
+        const res = await axios.get(`${API_BASE_URL}/Stock-transactions/vendor/${vendorId}`);
+        console.log('transactions...', res.data);
         setTransactions(res.data);
         setFilteredTx(res.data);
       } catch (error) {
@@ -34,11 +36,9 @@ export default function TransactionsTab({ selectedWarehouseId }) {
     };
 
     fetchTransactions();
-  }, [selectedWarehouseId]);
+  }, [vendorId]);
 
-  /**
-   * Filter transactions by search term. For example, search by transactionType or notes.
-   */
+  // Filter transactions by search term
   const handleSearch = (term) => {
     setSearchTerm(term);
     if (!term) {
@@ -48,30 +48,67 @@ export default function TransactionsTab({ selectedWarehouseId }) {
 
     const lowerTerm = term.toLowerCase();
     const results = transactions.filter((tx) => {
-      const typeMatch = tx.transactionType?.toLowerCase().includes(lowerTerm);
+      const typeMatch = tx.transaction_type?.toLowerCase().includes(lowerTerm);
       const notesMatch = tx.notes?.toLowerCase().includes(lowerTerm);
-      const idMatch = tx.transactionId?.toLowerCase().includes(lowerTerm);
+      const idMatch = tx.transaction_id?.toString().includes(lowerTerm);
       return typeMatch || notesMatch || idMatch;
     });
     setFilteredTx(results);
   };
 
-  /**
-   * Returns a corresponding icon component based on the transaction type.
-   */
+  // Get the corresponding icon based on the transaction type
   const getTransactionIcon = (type) => {
     switch (type) {
       case 'stockIn':
-        return <FaBoxOpen style={{ marginRight: 6 }} />;
+        return <FaBoxOpen style={{ marginRight: 6, color: 'green' }} />;
       case 'stockOut':
-        return <FaArrowUp style={{ marginRight: 6 }} />;
+        return <FaArrowUp style={{ marginRight: 6, color: 'red' }} />;
       case 'moveStock':
         return <FaExchangeAlt style={{ marginRight: 6 }} />;
       case 'adjust':
-        return <FaArrowDown style={{ marginRight: 6 }} />;
+        return <FaArrowDown style={{ marginRight: 6, color: 'orange' }} />;
       default:
         return <BiNotepad style={{ marginRight: 6 }} />;
     }
+  };
+
+  // Fetch item details based on item_id
+  const fetchItemDetails = async (item_id) => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/item/${item_id}`);
+      return res.data;
+    } catch (error) {
+      console.error('Error fetching item details:', error);
+      return null;
+    }
+  };
+
+
+
+
+    // Handle the selection of a transaction
+    const handleSelectTransaction = async (tx) => {
+      setSelectedTx(tx);
+  
+      // Check if tx.item_id exists before attempting to fetch details
+      if (tx.item_id) {
+        const productDetails = await fetchItemDetails(tx.item_id);
+        console.log('productDetails...',productDetails);
+      setSelectedTxProducts(productDetails);
+      
+      } else {
+        setSelectedTxProducts(null);
+      }
+    };
+
+    console.log('SelectedTxProducts...',selectedTxProducts);
+  // Format the date for displaying in "DD-MM-YYYY" format
+  const formatDate = (timestamp) => {
+    const date = new Date(timestamp);
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}-${month}-${year}`;
   };
 
   return (
@@ -104,14 +141,14 @@ export default function TransactionsTab({ selectedWarehouseId }) {
                   backgroundColor: isSelected ? '#e3f7ff' : '#f9f9f9',
                   border: isSelected ? '1px solid #1e88e5' : '1px solid #ddd',
                 }}
-                onClick={() => setSelectedTx(tx)}
+                onClick={() => handleSelectTransaction(tx)}
               >
-                {getTransactionIcon(tx.transactionType)}
+                {getTransactionIcon(tx.transaction_type)}
                 <span style={{ fontWeight: 'bold' }}>
-                  {tx.transactionType.charAt(0).toUpperCase() + tx.transactionType.slice(1)}
+                  {tx.transaction_type.charAt(0).toUpperCase() + tx.transaction_type.slice(1)}
                 </span>
                 <span style={styles.txDate}>
-                  {new Date(tx.timestamp).toLocaleDateString()}
+                  {formatDate(tx.created_at)}  {/* Updated to show date in DD-MM-YYYY format */}
                 </span>
               </div>
             );
@@ -125,46 +162,61 @@ export default function TransactionsTab({ selectedWarehouseId }) {
       {/* RIGHT PANE - TRANSACTION DETAILS */}
       <div style={styles.rightPane}>
         {selectedTx ? (
-          <div style={styles.detailContainer} key={selectedTx._id}>
+          <div style={styles.detailContainer} key={selectedTx.transaction_id}>
             <h2 style={styles.detailHeader}>
-              Transaction #{selectedTx.transactionId}
+              Transaction #{selectedTx.transaction_id}
             </h2>
 
-            {/* Fade-in animation container */}
+            {/* Transaction details */}
             <div style={styles.detailContent}>
               <p style={styles.detailRow}>
-                <strong>Type:</strong> {selectedTx.transactionType}
+                <strong>Type:</strong> {selectedTx.transaction_type}
               </p>
               <p style={styles.detailRow}>
                 <strong>Date:</strong>{' '}
-                {new Date(selectedTx.timestamp).toLocaleString()}
+                {new Date(selectedTx.created_at).toLocaleString()}
               </p>
               <p style={styles.detailRow}>
                 <strong>Notes:</strong> {selectedTx.notes || '—'}
               </p>
               <p style={styles.detailRow}>
-                <strong>Performed By:</strong> {selectedTx.performedBy || '—'}
+                <strong>Performed By:</strong> {selectedTx.performed_by || '—'}
               </p>
 
-              {/* List of products */}
-              <h3 style={styles.subHeader}>Products</h3>
-              <ul style={styles.productList}>
-                {selectedTx.products?.map((prod, idx) => (
-                  <li key={idx} style={styles.productItem}>
-                    <span style={{ color: '#444' }}>
-                      <strong>Product ID:</strong> {prod.productId}
-                    </span>
-                    <br />
-                    <span style={{ color: '#444' }}>
-                      <strong>Quantity:</strong> {prod.quantity}
-                    </span>
-                    <br />
-                    <span style={{ color: '#444' }}>
-                      <strong>Final Price:</strong> ₹{prod.finalPrice?.toFixed(2)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              {/* Product details */}
+              {selectedTxProducts? (
+                <div style={styles.subHeader}>
+                  <h3>Product Details</h3>
+                  <ul style={styles.productList}>
+                    <li style={styles.productItem}>
+                      <div style={styles.productInfo}>
+                        {/* Product Image */}
+                        <img
+                          src={selectedTxProducts.imageURL}
+                          alt={selectedTxProducts.name}
+                          style={styles.productImage}
+                        />
+                        {/* Product Information */}
+                        <div style={styles.productDetails}>
+                          <span style={{ color: '#444' }}>
+                            <strong>Item Name:</strong> {selectedTxProducts.name || 'N/A'}
+                          </span>
+                          <br />
+                          <span style={{ color: '#444' }}>
+                            <strong>Quantity:</strong> {selectedTxProducts.stock_quantity}
+                          </span>
+                          <br />
+                          <span style={{ color: '#444' }}>
+                            <strong>Final Price:</strong> ${selectedTxProducts.selling_price || '—'}
+                          </span>
+                        </div>
+                      </div>
+                    </li>
+                  </ul>
+                </div>
+              ) : (
+                <p>No product details available.</p>
+              )}
             </div>
           </div>
         ) : (
@@ -288,6 +340,23 @@ const styles = {
     marginBottom: '0.5rem',
     fontSize: '0.9rem',
     transition: 'background-color 0.2s ease',
+    display: 'flex',
+    alignItems: 'center',
+  },
+  productInfo: {
+    display: 'flex',
+    alignItems: 'center',
+  },
+  productImage: {
+    width: '50px',
+    height: '50px',
+    marginRight: '10px',
+    objectFit: 'cover',
+    borderRadius: '4px',
+  },
+  productDetails: {
+    display: 'flex',
+    flexDirection: 'column',
   },
   emptyDetails: {
     margin: 'auto',

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import styled from 'styled-components';
+import styled, { keyframes } from 'styled-components';
 import axios from 'axios';
 import { LoginContext } from '../context/loginContext';
 import ReactPaginate from 'react-paginate';
@@ -22,6 +22,7 @@ const ProductList = () => {
   const [searchQuery, setSearchQuery] = useState('');
 
   const [editItemData, setEditItemData] = useState({
+    categoryId: '',  
     name: '',
     brand: '',
     size: '',
@@ -37,9 +38,11 @@ const ProductList = () => {
 
   const [uploadedImages, setUploadedImages] = useState([]); // For handling uploaded images
 
+  const [categories, setCategories] = useState([]);
+
   const fetchItemsByVendor = async (vendorId) => {
     try {
-      const response = await axios.get(`https://thriftstorebackend.onrender.com/api/vendor/${vendorId}/items`);
+      const response = await axios.get(`https://thriftstorebackend-8xii.onrender.com/api/vendor/${vendorId}/items`);
       if (Array.isArray(response.data)) {
         setItems(response.data);
         setFilteredItems(response.data);
@@ -55,6 +58,22 @@ const ProductList = () => {
       fetchItemsByVendor(vendorId);
     }
   }, [vendorId, currentPage]);
+
+
+  const fetchCategories = async () => {
+    try {
+      const response = await axios.get(`https://thriftstorebackend-8xii.onrender.com/api/vendor-categories/categories/vendor/${vendorId}`);
+      setCategories(response.data);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+  
+  useEffect(() => {
+    if (vendorId) {
+      fetchCategories();
+    }
+  }, [vendorId]);
 
   const handlePageClick = (data) => {
     setCurrentPage(data.selected);
@@ -73,43 +92,41 @@ const ProductList = () => {
 
   const handleItemDelete = async (itemId) => {
     try {
-      const response = await axios.delete(`https://thriftstorebackend.onrender.com/api/item/${itemId}`);
-      console.log('Item deleted successfully:', response.data);
-      fetchItemsByVendor();
+      await axios.delete(`https://thriftstorebackend-8xii.onrender.com/api/item/deleteitem/${itemId}`);
+      const vendorId = localStorage.getItem('vendorId');
+      fetchItemsByVendor(vendorId);
     } catch (error) {
       console.error('Error deleting item:', error);
     }
   };
 
   const handleItemSave = async () => {
-    const newItem = { ...editItemData, imageURL: uploadedImages.join(',') }; // Handle multiple image URLs
-
+    const newItem = { ...editItemData, imageURL: uploadedImages.join(',') };
     try {
-      const response = await axios.put(`https://thriftstorebackend.onrender.com/api/item/${editItemData.item_id}`, newItem);
-      console.log('Item updated successfully:', response.data);
-      fetchItemsByVendor();
+      await axios.put(`https://thriftstorebackend-8xii.onrender.com/api/item/updateitem/${editItemData.item_id}`, newItem);
+      const vendorId = localStorage.getItem('vendorId');
+      fetchItemsByVendor(vendorId);
       setShowEditModal(false);
     } catch (error) {
       console.error('Error updating item:', error);
     }
   };
-
+  
   const handleItemAdd = async () => {
     const newItem = { ...editItemData, imageURL: uploadedImages.join(','), vendor_id: vendorId };
-
     try {
-      const response = await axios.post('https://thriftstorebackend.onrender.com/api/item', newItem);
-      console.log('Item added successfully:', response.data);
-      fetchItemsByVendor();
+      await axios.post('https://thriftstorebackend-8xii.onrender.com/api/item/additem', newItem);
+      const vendorId = localStorage.getItem('vendorId');
+      fetchItemsByVendor(vendorId);
       setShowUploadContainer(false);
     } catch (error) {
       console.error('Error adding item:', error);
     }
   };
-
-
+  
   const handleAddItemClick = () => {
     setEditItemData({
+      categoryId: '', // reset the category
       name: '',
       brand: '',
       size: '',
@@ -122,53 +139,40 @@ const ProductList = () => {
       description: '',
       review: 0,
     });
-    setViewItem(null); 
-    setUploadedImages([]); 
+    setViewItem(null);
+    setUploadedImages([]);
     setShowUploadContainer(true);
   };
+  
 
+  // Image Upload using FormData with imgbb API
   const handleImageUpload = async (files) => {
-    // Ensure files is an array (it might be an array-like object)
-    const filesArray = Array.isArray(files) ? files : [files]; // Handle cases where only one file is passed
-  
+    const filesArray = Array.isArray(files) ? files : [files];
     const formData = new FormData();
-  
-    // Loop through each file and append it to the FormData object
-    filesArray.forEach(file => {
-      formData.append('image', file); 
+    filesArray.forEach((file) => {
+      formData.append('image', file);
     });
-  
     try {
-      // Sending the image file using the POST method with multipart/form-data
       const response = await axios.post(
         'https://api.imgbb.com/1/upload?expiration=600&key=4cd9c9ee9a555c27315262a6a7d7a8b2',
         formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data', // Ensure proper content type
-          },
-        }
+        { headers: { 'Content-Type': 'multipart/form-data' } }
       );
-  
-      // If the response is successful, get the image URL and add to the list of uploaded images
       const imageUrl = response.data.data.url;
-      setUploadedImages((prevImages) => [...prevImages, imageUrl]); // Add the uploaded image URL to the preview container
+      setUploadedImages((prevImages) => [...prevImages, imageUrl]);
     } catch (error) {
       console.error('Error uploading image:', error);
     }
   };
-  
 
   const { getRootProps, getInputProps } = useDropzone({
     onDrop: (acceptedFiles) => {
-      handleImageUpload(acceptedFiles); 
+      handleImageUpload(acceptedFiles);
     },
   });
-  
 
   const removeImage = (index) => {
-    const newImages = uploadedImages.filter((_, i) => i !== index);
-    setUploadedImages(newImages);
+    setUploadedImages(uploadedImages.filter((_, i) => i !== index));
   };
 
   const paginatedItems = () => {
@@ -185,44 +189,55 @@ const ProductList = () => {
             placeholder="Search items..."
             onChange={(e) => setSearchQuery(e.target.value)}
           />
-
           <FiltersContainer>
-                <AddButton onClick={handleAddItemClick}>Add Item</AddButton>
+            <AddButton onClick={handleAddItemClick}>Add Item</AddButton>
           </FiltersContainer>
 
-          <ProductListContainer>
+          {/* Products rendered in table-like rows */}
+          <TableContainer>
+            <TableHeader>
+              <HeaderCell>Image</HeaderCell>
+              <HeaderCell>Name</HeaderCell>
+              <HeaderCell>Price</HeaderCell>
+              <HeaderCell>Stock</HeaderCell>
+              <HeaderCell>Actions</HeaderCell>
+            </TableHeader>
             {paginatedItems().map((item) => (
-              <ProductCard key={item.item_id}>
-                <ProductInfo>
+              <ProductRow key={item.item_id}>
+                <ImageCell>
                   <ProductImg src={item.imageURL || ''} alt={item.name} />
-                  <ProductTitle>{item.name}</ProductTitle>
-                  <ul>
-                    <ListItem>Brand: {item.brand}</ListItem>
-                    <ListItem>Price: ₹ {item.selling_price}</ListItem>
-                    <ListItem>Stock: {item.stock_quantity}</ListItem>
-                  </ul>
-                </ProductInfo>
-                <ButtonGroup>
-                  <ViewButton onClick={() => handleViewItem(item)}>View</ViewButton>
-                  <EditButton onClick={() => handleItemUpdate(item)}>Edit</EditButton>
-                  <DeleteButton onClick={() => handleItemDelete(item.item_id)}>Delete</DeleteButton>
-                </ButtonGroup>
-              </ProductCard>
+                </ImageCell>
+                <TextCell>{item.name}</TextCell>
+                <TextCell>$ {item.selling_price}</TextCell>
+                <TextCell>{item.stock_quantity}</TextCell>
+                <ActionsCell>
+                  <ButtonGroupVertical>
+                    <ViewButton onClick={() => handleViewItem(item)}>
+                      View
+                    </ViewButton>
+                    <EditButton onClick={() => handleItemUpdate(item)}>
+                      Edit
+                    </EditButton>
+                    <DeleteButton onClick={() => handleItemDelete(item.item_id)}>
+                      Delete
+                    </DeleteButton>
+                  </ButtonGroupVertical>
+                </ActionsCell>
+              </ProductRow>
             ))}
-          </ProductListContainer>
+          </TableContainer>
 
           <PaginateContainer>
             <UpdatedReactPaginate
-              previousLabel={'Previous'}
-              nextLabel={'Next'}
-              
+              previousLabel="Previous"
+              nextLabel="Next"
               pageCount={Math.ceil(filteredItems.length / itemsPerPage)}
               onPageChange={handlePageClick}
-              containerClassName={'pagination-container'}
-              activeClassName={'active'}
-              pageClassName={'pagination-item'}
-              previousClassName={'previous-button'}
-              nextClassName={'next-button'}
+              containerClassName="pagination-container"
+              activeClassName="active"
+              pageClassName="pagination-item"
+              previousClassName="previous-button"
+              nextClassName="next-button"
             />
           </PaginateContainer>
         </ContentWrapper>
@@ -230,77 +245,96 @@ const ProductList = () => {
 
       {/* Add/Edit Item Modal */}
       {(showUploadContainer || showEditModal) && (
-  <Modal onClick={(e) => e.stopPropagation()}>
-    <ModalTitle>{showUploadContainer ? 'Add Item' : 'Edit Item'}</ModalTitle>
-    
-    <InputRow>
-      <Label>Name:</Label>
-      <Input
-        type="text"
-        value={editItemData.name}
-        onChange={(e) => setEditItemData({ ...editItemData, name: e.target.value })}
-      />
-    </InputRow>
-
-    <InputRow>
-      <Label>Brand:</Label>
-      <Input
-        type="text"
-        value={editItemData.brand}
-        onChange={(e) => setEditItemData({ ...editItemData, brand: e.target.value })}
-      />
-    </InputRow>
-
-    <InputRow>
-      <Label>Price:</Label>
-      <Input
-        type="number"
-        value={editItemData.selling_price}
-        onChange={(e) => setEditItemData({ ...editItemData, selling_price: e.target.value })}
-      />
-    </InputRow>
-
-    <InputRow>
-      <Label>Description:</Label>
-      <Input
-        type="text"
-        value={editItemData.description}
-        onChange={(e) => setEditItemData({ ...editItemData, description: e.target.value })}
-      />
-    </InputRow>
-
-    <InputRow>
-      <Label>Images:</Label>
-      <div {...getRootProps()}>
-        <input {...getInputProps()} />
-        <Dropzone>
-          <p>Drag & Drop your images here, or click to select files.</p>
-        </Dropzone>
-      </div>
-      <PreviewContainer>
-        {uploadedImages.map((image, index) => (
-          <ImagePreview key={index}>
-            <PreviewImg src={image} alt="preview" />
-            <RemoveImageButton onClick={() => removeImage(index)}>Remove</RemoveImageButton>
-          </ImagePreview>
-        ))}
-      </PreviewContainer>
-      <PrimaryButton onClick={handleImageUpload}>
-        Upload Image
-      </PrimaryButton>
-    </InputRow>
-    
-    <ButtonsRow>
-      <PrimaryButton onClick={showUploadContainer ? handleItemAdd : handleItemSave}>
-        {showUploadContainer ? 'Add Item' : 'Save Changes'}
-      </PrimaryButton>
-      <PrimaryButton onClick={() => showUploadContainer ? setShowUploadContainer(false) : setShowEditModal(false)}>
-        Cancel
-      </PrimaryButton>
-    </ButtonsRow>
-  </Modal>
-)}
-
+        <Modal onClick={(e) => e.stopPropagation()}>
+          <ModalTitle>{showUploadContainer ? 'Add Item' : 'Edit Item'}</ModalTitle>
+          <InputRow>
+            <Label>Name:</Label>
+            <Input
+              type="text"
+              value={editItemData.name}
+              onChange={(e) =>
+                setEditItemData({ ...editItemData, name: e.target.value })
+              }
+            />
+          </InputRow>
+          <InputRow>
+            <Label>Brand:</Label>
+            <Input
+              type="text"
+              value={editItemData.brand}
+              onChange={(e) =>
+                setEditItemData({ ...editItemData, brand: e.target.value })
+              }
+            />
+          </InputRow>
+          <InputRow>
+            <Label>Price:</Label>
+            <Input
+              type="number"
+              value={editItemData.selling_price}
+              onChange={(e) =>
+                setEditItemData({ ...editItemData, selling_price: e.target.value })
+              }
+            />
+          </InputRow>
+          <InputRow>
+            <Label>Description:</Label>
+            <Input
+              type="text"
+              value={editItemData.description}
+              onChange={(e) =>
+                setEditItemData({ ...editItemData, description: e.target.value })
+              }
+            />
+          </InputRow>
+          <InputRow>
+            <Label>Category:</Label>
+            <Select 
+              value={editItemData.categoryId} 
+              onChange={(e) => setEditItemData({ ...editItemData, categoryId: e.target.value })}
+            >
+              <option value="">Select a category</option>
+              {categories.map((category) => (
+                // Use category.categoryId for the value
+                <option key={category.categoryId} value={category.categoryId}>
+                  {category.name}
+                </option>
+              ))}
+            </Select>
+          </InputRow>
+          <InputRow>
+            <Label>Images:</Label>
+            <div {...getRootProps()}>
+              <input {...getInputProps()} />
+              <Dropzone>
+                <p>Drag & Drop your images here, or click to select files.</p>
+              </Dropzone>
+            </div>
+            <PreviewContainer>
+              {uploadedImages.map((image, index) => (
+                <ImagePreview key={index}>
+                  <PreviewImg src={image} alt="preview" />
+                  <RemoveImageButton onClick={() => removeImage(index)}>
+                    Remove
+                  </RemoveImageButton>
+                </ImagePreview>
+              ))}
+            </PreviewContainer>
+          </InputRow>
+          <ButtonsRow>
+            <PrimaryButton onClick={showUploadContainer ? handleItemAdd : handleItemSave}>
+              {showUploadContainer ? 'Add Item' : 'Save Changes'}
+            </PrimaryButton>
+            <PrimaryButton
+              onClick={() =>
+                showUploadContainer ? setShowUploadContainer(false) : setShowEditModal(false)
+              }
+            >
+              Cancel
+            </PrimaryButton>
+          </ButtonsRow>
+        </Modal>
+      )}
 
       {/* View Item Modal */}
       {showViewModal && (
@@ -322,15 +356,28 @@ const ProductList = () => {
 
 export default ProductList;
 
+/* ------------------ Styled Components ------------------ */
 
 const Container = styled.div`
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
+  padding: 30px;
+  background: #f8f9fa;
+  min-height: 100vh;
+  font-family: 'Roboto', sans-serif;
+`;
+
+const Select = styled.select`
+  width: 100%;
+  padding: 10px 15px;
+  font-size: 1rem;
+  border: 1px solid #ced4da;
+  border-radius: 30px;
+  &:focus {
+    outline: none;
+    border-color: #80bdff;
+  }
 `;
 
 const Main = styled.main`
-  flex: 1;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -339,64 +386,233 @@ const Main = styled.main`
 const ContentWrapper = styled.div`
   width: 100%;
   max-width: 1200px;
-  padding: 20px;
-  background-color: white;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  background: #fff;
+  border-radius: 10px;
+  padding: 30px;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
 `;
 
 const SearchInput = styled.input`
-  padding: 10px;
+  padding: 12px 15px;
   width: 100%;
-  border-radius: 8px;
-  border: 1px solid #ccc;
+  border-radius: 30px;
+  border: 1px solid #ced4da;
+  margin-bottom: 20px;
+  font-size: 1rem;
+  &:focus {
+    outline: none;
+    border-color: #80bdff;
+  }
 `;
 
 const FiltersContainer = styled.div`
   display: flex;
   justify-content: flex-start;
-  gap: 10px;
-  margin-bottom: 20px;
+  margin-bottom: 25px;
 `;
 
 const AddButton = styled.button`
-  padding: 10px 20px;
-  background-color: #007bff;
-  color: white;
-  border-radius: 8px;
+  background: linear-gradient(45deg, #007bff, #0056b3);
+  color: #fff;
+  padding: 12px 25px;
   border: none;
+  border-radius: 30px;
+  font-size: 1rem;
   cursor: pointer;
+  transition: transform 0.2s ease;
   &:hover {
-    background-color: #0056b3;
+    transform: scale(1.02);
   }
 `;
 
-const ProductListContainer = styled.div`
+/* Table-like layout */
+const TableContainer = styled.div`
   display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
+  flex-direction: column;
+  width: 100%;
 `;
 
+const TableHeader = styled.div`
+  display: flex;
+  padding: 15px 20px;
+  background-color: #e9ecef;
+  font-weight: bold;
+  border-radius: 5px;
+  margin-bottom: 10px;
+`;
 
+const HeaderCell = styled.div`
+  flex: 1;
+  text-align: center;
+`;
+
+const ProductRow = styled.div`
+  display: flex;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid #dee2e6;
+  transition: background-color 0.3s;
+  &:hover {
+    background-color: #f1f3f5;
+  }
+`;
+
+const ImageCell = styled.div`
+  flex: 0 0 80px;
+  text-align: center;
+`;
+
+const TextCell = styled.div`
+  flex: 1;
+  text-align: center;
+  font-size: 1rem;
+`;
+
+const ActionsCell = styled.div`
+  flex: 0 0 120px;
+  text-align: center;
+`;
+
+const ButtonGroupVertical = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`;
+
+const ProductImg = styled.img`
+  width: 70px;
+  height: 70px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #ced4da;
+`;
+
+/* Pagination Styling */
+const PaginateContainer = styled.div`
+  margin-top: 30px;
+  display: flex;
+  justify-content: center;
+`;
+
+const UpdatedReactPaginate = styled(ReactPaginate)`
+  li {
+    list-style: none;
+    display: inline-block;
+    margin: 0 5px;
+    a {
+      padding: 10px 15px;
+      border-radius: 5px;
+      border: 1px solid #ced4da;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      color: #495057;
+      text-decoration: none;
+    }
+    &.active a {
+      background-color: #007bff;
+      color: #fff;
+      border-color: #007bff;
+    }
+    a:hover {
+      background-color: #007bff;
+      color: #fff;
+    }
+  }
+`;
+
+/* Modal and Form Styling */
+const Modal = styled.div`
+  position: fixed;
+  top: 10%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 600px;
+  background: #fff;
+  padding: 30px;
+  border-radius: 10px;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+  z-index: 1100;
+`;
+
+const ModalTitle = styled.h2`
+  margin-bottom: 25px;
+  text-align: center;
+  color: #343a40;
+`;
+
+const InputRow = styled.div`
+  margin-bottom: 15px;
+`;
+
+const Label = styled.label`
+  display: block;
+  font-size: 1rem;
+  margin-bottom: 8px;
+  color: #495057;
+`;
+
+const Input = styled.input`
+  width: 100%;
+  padding: 10px 15px;
+  font-size: 1rem;
+  border: 1px solid #ced4da;
+  border-radius: 30px;
+  &:focus {
+    outline: none;
+    border-color: #80bdff;
+  }
+`;
+
+const ButtonsRow = styled.div`
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+  gap: 15px;
+`;
+
+const PrimaryButton = styled.button`
+  padding: 10px 25px;
+  background: linear-gradient(45deg, #28a745, #218838);
+  color: #fff;
+  border: none;
+  border-radius: 30px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+  &:hover {
+    transform: scale(1.03);
+  }
+`;
+
+/* Dropzone and Image Preview */
 const Dropzone = styled.div`
   border: 2px dashed #007bff;
-  padding: 20px;
-  border-radius: 8px;
+  padding: 30px;
+  border-radius: 10px;
   text-align: center;
+  color: #495057;
   cursor: pointer;
+  margin-bottom: 15px;
+  transition: background 0.3s ease;
+  &:hover {
+    background: #e9ecef;
+  }
 `;
 
 const PreviewContainer = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 15px;
 `;
 
 const ImagePreview = styled.div`
   position: relative;
-  display: inline-block;
   width: 100px;
   height: 100px;
+  border-radius: 8px;
   overflow: hidden;
+  border: 1px solid #ced4da;
 `;
 
 const PreviewImg = styled.img`
@@ -407,173 +623,67 @@ const PreviewImg = styled.img`
 
 const RemoveImageButton = styled.button`
   position: absolute;
-  top: 0;
-  right: 0;
-  background-color: red;
-  color: white;
+  top: 4px;
+  right: 4px;
+  background: rgba(220,53,69, 0.9);
+  color: #fff;
   border: none;
   border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  font-size: 0.75rem;
   cursor: pointer;
-  padding: 5px;
-  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 `;
 
-
-const ProductCard = styled.div`
-  width: 300px;
-  padding: 20px;
-  background-color: #f9f9f9;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  border-radius: 10px;
-`;
-
-const ProductInfo = styled.div`
-  margin-bottom: 20px;
-`;
-
-const ProductImg = styled.img`
-  width: 100%;
-  height: auto;
-  border-radius: 8px;
-`;
-
-const ProductTitle = styled.h3`
-  font-size: 1.2rem;
-  margin: 10px 0;
-`;
-
+/* List Styling */
 const ListItem = styled.li`
-  font-size: 0.9rem;
-`;
-
-const ButtonGroup = styled.div`
-  display: flex;
-  justify-content: space-between;
-`;
-
-const ViewButton = styled.button`
-  padding: 5px 10px;
-  background-color: #28a745;
-  color: white;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-`;
-
-const EditButton = styled.button`
-  padding: 5px 10px;
-  background-color: #007bff;
-  color: white;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-`;
-
-const DeleteButton = styled.button`
-  padding: 5px 10px;
-  background-color: #dc3545;
-  color: white;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-`;
-
-const PaginateContainer = styled.div`
-  margin-top: 20px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-`;
-
-const PaginationButton = styled.button`
-  padding: 10px;
-  margin: 0 5px;
-  background-color: #f0f0f0;
-  border-radius: 8px;
-  border: 1px solid #ddd;
-  cursor: pointer;
-
-  &:hover {
-    background-color: #007bff;
-    color: white;
-  }
-
-  &.active {
-    background-color: #007bff;
-    color: white;
-  }
-
-  &:disabled {
-    background-color: #e0e0e0;
-    cursor: not-allowed;
-  }
-`;
-
-const PaginationWrapper = styled.div`
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-`;
-
-const UpdatedReactPaginate = styled(ReactPaginate)`
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 10px;
-`;
-
-
-const Modal = styled.div`
-  position: fixed;
-  top: 10%;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 80%;
-  max-width: 600px;
-  padding: 20px;
-  background-color: white;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.1);
-  border-radius: 10px;
-  z-index: 1000;
-`;
-
-const ModalTitle = styled.h2`
-  margin-bottom: 20px;
-`;
-
-const InputRow = styled.div`
-  margin-bottom: 10px;
-`;
-
-const Label = styled.label`
-  display: block;
-  font-size: 1rem;
+  font-size: 0.95rem;
+  color: #495057;
   margin-bottom: 5px;
 `;
 
-const Input = styled.input`
-  width: 100%;
-  padding: 8px;
-  font-size: 1rem;
-  border-radius: 8px;
-  border: 1px solid #ccc;
-`;
-
-const ButtonsRow = styled.div`
-  display: flex;
-  justify-content: center;
-  margin-top: 20px;
-`;
-
-const PrimaryButton = styled.button`
-  padding: 10px 20px;
-  background-color: #28a745;
-  color: white;
-  border-radius: 8px;
+/* Action Buttons Styling */
+const ViewButton = styled.button`
+  padding: 8px 15px;
+  background: linear-gradient(45deg, #28a745, #218838);
+  color: #fff;
   border: none;
+  border-radius: 30px;
+  font-size: 0.9rem;
   cursor: pointer;
+  transition: background 0.3s ease;
   &:hover {
-    background-color: #218838;
+    background: #218838;
   }
 `;
 
+const EditButton = styled.button`
+  padding: 8px 15px;
+  background: linear-gradient(45deg, #007bff, #0069d9);
+  color: #fff;
+  border: none;
+  border-radius: 30px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.3s ease;
+  &:hover {
+    background: #0069d9;
+  }
+`;
+
+const DeleteButton = styled.button`
+  padding: 8px 15px;
+  background: linear-gradient(45deg, #dc3545, #c82333);
+  color: #fff;
+  border: none;
+  border-radius: 30px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.3s ease;
+  &:hover {
+    background: #c82333;
+  }
+`;
