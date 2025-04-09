@@ -154,7 +154,7 @@ const ProductList = () => {
     });
     try {
       const response = await axios.post(
-        'https://api.imgbb.com/1/upload?expiration=600&key=b6cef7986c62278aaa4d9faceb83f3b3',
+        'https://api.imgbb.com/1/upload?expiration=600&key=4cd9c9ee9a555c27315262a6a7d7a8b2',
         formData,
         { headers: { 'Content-Type': 'multipart/form-data' } }
       );
